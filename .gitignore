@@ -1,0 +1,13 @@
+# Never publish keys, account tokens, personal saves, or packaged game assets.
+*private*.xml
+*.pfx
+*.p12
+*.key
+Profile/
+Support/
+versions/
+release/
+*.exe
+*.dll
+*.zip
+__pycache__/
