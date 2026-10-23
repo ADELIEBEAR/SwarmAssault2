@@ -9,7 +9,6 @@ import json
 import os
 import re
 import shutil
-import struct
 import subprocess
 import tempfile
 import zipfile
@@ -94,10 +93,12 @@ def build(project, output, version, private_key):
             z.writestr('package.json',json.dumps(manifest,ensure_ascii=False,separators=(',',':')))
         filename = f'SwarmAssaultII-Setup-v{version}.exe'
         setup = output/filename
-        with setup.open('wb') as out, exe.open('rb') as source, payload.open('rb') as data:
-            shutil.copyfileobj(source,out)
-            offset = out.tell(); shutil.copyfileobj(data,out)
-            out.write(b'SIISET01'+struct.pack('<qq',offset,payload.stat().st_size)+bytes.fromhex(digest(payload)))
+        # Keep package data in declared PE resources instead of an opaque appended overlay.
+        payload_hash = work/'payload.sha256'
+        payload_hash.write_text(digest(payload), encoding='ascii')
+        setup_command = [('/out:'+str(setup)) if str(arg).startswith('/out:') else arg for arg in command]
+        run(setup_command + ['/resource:'+str(payload)+',SwarmAssaultII.Package.zip,public',
+                             '/resource:'+str(payload_hash)+',SwarmAssaultII.Package.sha256,public'])
         update = {'Schema':1,'Product':PRODUCT,'Repository':REPO,'Version':version,'FileName':filename,'Length':setup.stat().st_size,'Sha256':digest(setup)}
         unsigned = work/'update-payload.json'; write_json(unsigned,update)
         run([signer,'sign',private_key,unsigned,output/'swarm-update.json'])

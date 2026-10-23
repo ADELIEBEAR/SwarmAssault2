@@ -86,9 +86,24 @@ namespace SwarmDistribution
                 using (p) { try { if (p.MainModule.FileName.StartsWith(root.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase)) return true; } catch { return true; } }
             return false;
         }
-        // The ZIP overlay has a fixed, bounded footer. Verify it before reading ZIP metadata.
+        const string PackageResource = "SwarmAssaultII.Package.zip";
+        const string PackageHashResource = "SwarmAssaultII.Package.sha256";
+        static Assembly PackageAssembly(string exe)
+        {
+            string path = Path.GetFullPath(exe);
+            var self = Assembly.GetExecutingAssembly();
+            if (String.Equals(path, self.Location, StringComparison.OrdinalIgnoreCase)) return self;
+            if (new FileInfo(path).Length > Int32.MaxValue) throw new InvalidDataException("설치 용량이 너무 큽니다.");
+            // Inspect an external package without executing any of its code.
+            return Assembly.ReflectionOnlyLoadFrom(path);
+        }
         public static bool HasPayload(string exe)
         {
+            return HasLegacyPayload(exe) || PackageAssembly(exe).GetManifestResourceNames().Contains(PackageResource);
+        }
+        static bool HasLegacyPayload(string exe)
+        {
+            // Keep the old bounded overlay reader for existing packages and recovery tests.
             using (var f = File.OpenRead(exe)) { if (f.Length < 56) return false; f.Position = f.Length - 56; byte[] b = new byte[8]; f.Read(b, 0, 8); return Encoding.ASCII.GetString(b) == "SIISET01"; }
         }
         public static string Unpack(string exe, string stage, Action<string, int> progress)
@@ -96,6 +111,23 @@ namespace SwarmDistribution
             string zip = stage + ".zip";
             try
             {
+                var packageAssembly = HasLegacyPayload(exe) ? null : PackageAssembly(exe);
+                using (var embedded = packageAssembly == null ? null : packageAssembly.GetManifestResourceStream(PackageResource))
+                {
+                if (embedded != null)
+                {
+                    string expected;
+                    using (var hash = packageAssembly.GetManifestResourceStream(PackageHashResource))
+                    {
+                        if (hash == null || hash.Length != 64) throw new InvalidDataException("설치 파일 검증 정보가 없습니다.");
+                        using (var reader = new StreamReader(hash, Encoding.ASCII)) expected = reader.ReadToEnd();
+                    }
+                    if (!Regex.IsMatch(expected, "^[0-9a-f]{64}$") || embedded.Length < 1 || embedded.Length > Int32.MaxValue) throw new InvalidDataException("설치 파일 검증 정보가 올바르지 않습니다.");
+                    using (var output = File.Create(zip)) embedded.CopyTo(output);
+                    if (HashFile(zip) != expected) throw new InvalidDataException("설치 파일 검증에 실패했습니다. 다시 받아 주세요.");
+                }
+                else
+                {
                 using (var f = File.OpenRead(exe))
                 using (var br = new BinaryReader(f, Encoding.UTF8, true))
                 {
@@ -108,6 +140,8 @@ namespace SwarmDistribution
                     using (var output = File.Create(zip))
                     { byte[] buffer = new byte[1024 * 1024]; long left = length; while (left > 0) { int n = f.Read(buffer, 0, (int)Math.Min(left, buffer.Length)); if (n == 0) throw new EndOfStreamException(); output.Write(buffer, 0, n); left -= n; } }
                     if (HashFile(zip) != Hex(expected)) throw new InvalidDataException("설치 파일 검증에 실패했습니다. 다시 받아 주세요.");
+                }
+                }
                 }
                 Directory.CreateDirectory(stage);
                 using (var archive = ZipFile.OpenRead(zip))

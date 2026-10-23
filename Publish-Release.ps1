@@ -11,5 +11,6 @@ $envelope = Get-Content -LiteralPath $update -Raw | ConvertFrom-Json
 $payload = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($envelope.Payload)) | ConvertFrom-Json
 if ($payload.Version -ne $Version -or $payload.Repository -ne 'ADELIEBEAR/SwarmAssault2') { throw '업데이트 정보와 배포 버전이 다릅니다.' }
 if ((Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvariant() -ne $payload.Sha256) { throw '설치파일 해시가 다릅니다.' }
+& (Join-Path $PSScriptRoot 'Test-ReleaseSecurity.ps1') -Installer $setup
 & gh release create "v$Version" $setup $update $sums --repo 'ADELIEBEAR/SwarmAssault2' --draft --title "스웜 어썰트 II $Version" --notes-file $notes
 if ($LASTEXITCODE -ne 0) { throw 'GitHub 초안 생성 실패. gh auth login으로 로그인 상태를 확인하세요.' }

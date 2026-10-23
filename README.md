@@ -26,15 +26,25 @@ python build_release.py --project 'D:\SwarmAssaultII-Project' --output 'D:\relea
 
 생성물 중 플레이어에게 필요한 것은 설치 EXE 하나입니다. 자동 업데이트를 위해 같은 Release에 `swarm-update.json`도 첨부합니다. `SHA256SUMS.txt`는 수동 검증용입니다. `launcher-build.exe`와 `package-inventory.json`은 개발 검사 자료이며 배포하지 않습니다.
 
+설치 데이터는 .NET의 명시적인 리소스로 포함합니다. 이전 설치파일의 ZIP 덧붙이기 형식도 읽을 수 있으며 기존 설치의 서명 키와 저장 경로를 유지합니다. RSA 업데이트 서명은 업데이트 내용 검증용이고, Windows의 게시자 인증용 Authenticode 서명과는 다릅니다.
+
 ```powershell
 ./Publish-Release.ps1 -Folder 'D:\release\2026.10.24.1' -Version '2026.10.24.1'
 ```
 
 위 명령은 로그인된 GitHub CLI로 **초안 Release**를 만듭니다. GitHub Releases에서 검토 후 정식으로 게시하고 최신 버전으로 지정하면, 설치된 게임이 다음 실행 때 자동 갱신됩니다. 시험판(prerelease)과 초안은 자동 업데이트 대상이 아닙니다. 버전은 `연도.월.일.순번` 네 숫자로 올리며 이전 버전으로 자동 내려가지 않습니다. GitHub 계정 토큰은 플레이어 프로그램에 포함되지 않습니다.
 
+게시 스크립트는 먼저 `Test-ReleaseSecurity.ps1`을 실행합니다. Defender 또는 실시간 보호가 꺼져 있거나 검사에서 위협·오류가 나오면 게시를 중단합니다. 먼저 최신 보안 정의로 검사하고 실제 브라우저 다운로드도 확인하세요. 보호 기능을 끄거나 예외를 추가해서 통과시키지 마세요. 바이러스 검사 통과는 모든 백신의 무탐지나 SmartScreen 평판을 보장하지 않으며, 공인 Authenticode 인증서가 없으면 게시자 경고가 남을 수 있습니다.
+
+```powershell
+./Test-ReleaseSecurity.ps1 -Installer 'D:\release\2026.10.24.1\SwarmAssaultII-Setup-v2026.10.24.1.exe'
+```
+
 ## 검증
 
 `Test-Distribution.ps1`은 별도 임시 설치와 가짜 게임 프로세스로 서명·손상 다운로드·설치·업데이트·저장 보존·삭제를 확인합니다. 실제 게임을 조작하거나 사용자 프로필에 접근하지 않습니다. 실전 게임 및 다른 PC의 GPU/드라이버 검사는 별도로 필요합니다.
+
+설치파일 탐지 조사와 포장 방식 개선의 검증 범위는 [보안 검증 기록](SECURITY-2026-10-23.md), 버전별 확인 사항은 [검증 결과](TEST-RESULTS.md)를 참고하세요. 기능 테스트 통과만으로 악성코드 검증이 끝났다고 판단하지 않습니다.
 
 ## 배포 권리
 

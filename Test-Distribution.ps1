@@ -13,3 +13,12 @@ $testExe = Join-Path $testFolder 'Tests.exe'
 if ($LASTEXITCODE -ne 0) { throw 'test compile failed' }
 & $testExe $testFolder $stub $assembly
 if ($LASTEXITCODE -ne 0) { throw 'distribution tests failed' }
+& {
+    # A test double, not a change to Windows antivirus settings.
+    function Get-MpComputerStatus { [pscustomobject]@{AntivirusEnabled=$true;RealTimeProtectionEnabled=$false} }
+    $blocked = $false
+    try { & (Join-Path $PSScriptRoot 'Test-ReleaseSecurity.ps1') -Installer $assembly }
+    catch { if ($_.Exception.Message -like '*실시간 보호*') { $blocked = $true } else { throw } }
+    if (!$blocked) { throw 'security gate accepted disabled protection' }
+    'PASS release gate rejects disabled protection without changing antivirus settings'
+}

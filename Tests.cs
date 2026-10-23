@@ -8,6 +8,8 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Reflection;
+using System.Reflection.Emit;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -29,7 +31,7 @@ class Tests
         string hash; using(var f=new MemoryStream(bytes)) hash=Core.Hash(f);
         return new Update { Schema=1, Product=Core.Product, Repository=config.Repository, Version=version, FileName="SwarmAssaultII-Setup-v"+version+".exe", Length=bytes.Length, Sha256=hash };
     }
-    static string Fixture(string version, string extra, bool badHash)
+    static string Fixture(string version, string extra, bool badHash, bool embedded = false, bool badPackageHash = false, bool missingPackageHash = false)
     {
         string file=Path.Combine(work,"fixture-"+Guid.NewGuid().ToString("N")+".exe");
         var files=new Dictionary<string,byte[]> {
@@ -43,6 +45,19 @@ class Tests
         foreach(var kv in files) using(var f=new MemoryStream(kv.Value)) package.Files.Add(new Entry {Path=kv.Key,Length=kv.Value.Length,Sha256=badHash?new string('0',64):Core.Hash(f)});
         byte[] zip;
         using(var stream=new MemoryStream()) { using(var z=new ZipArchive(stream,ZipArchiveMode.Create,true)) { foreach(var kv in files) using(var f=z.CreateEntry(kv.Key).Open()) f.Write(kv.Value,0,kv.Value.Length); byte[] b=Encoding.UTF8.GetBytes(Core.Json.Serialize(package)); using(var f=z.CreateEntry("package.json").Open()) f.Write(b,0,b.Length); } zip=stream.ToArray(); }
+        if (embedded)
+        {
+            var builder=AppDomain.CurrentDomain.DefineDynamicAssembly(new AssemblyName(Path.GetFileNameWithoutExtension(file)),AssemblyBuilderAccess.Save,work);
+            var module=builder.DefineDynamicModule("Package",Path.GetFileName(file));
+            using(var content=new MemoryStream(zip))
+            using(var hash=new MemoryStream(Encoding.ASCII.GetBytes(badPackageHash?new string('0',64):Core.Hash(new MemoryStream(zip)))))
+            {
+                module.DefineManifestResource("SwarmAssaultII.Package.zip",content,ResourceAttributes.Public);
+                if(!missingPackageHash) module.DefineManifestResource("SwarmAssaultII.Package.sha256",hash,ResourceAttributes.Public);
+                builder.Save(Path.GetFileName(file));
+            }
+            return file;
+        }
         byte[] prefix=File.ReadAllBytes(assembly);
         using(var output=File.Create(file)) using(var b=new BinaryWriter(output)) { b.Write(prefix); b.Write(zip); b.Write(Encoding.ASCII.GetBytes("SIISET01")); b.Write((long)prefix.Length); b.Write((long)zip.Length); using(var s=SHA256.Create()) b.Write(s.ComputeHash(zip)); }
         return file;
@@ -119,6 +134,16 @@ class Tests
             Throws(()=>Core.Install(v1,root,null,false,false,(s,n)=>{}),"installer downgrade rejected");
             Core.Install(v2,root,null,false,false,(s,n)=>{});
             OK(Core.Read<Active>(Path.Combine(root,"active-version.json")).Engine.Contains("-repair-"),"same-version repair uses immutable slot");
+            string resource=Fixture("2026.10.23.8",null,false,true);
+            OK(Core.HasPayload(resource) && !Core.HasPayload(assembly),"declared resource package distinguished from player launcher");
+            Throws(()=>Core.Install(Fixture("2026.10.23.8",null,false,true,true),root,null,false,false,(s,n)=>{}),"embedded package hash tampering rejected");
+            Throws(()=>Core.Install(Fixture("2026.10.23.8",null,false,true,false,true),root,null,false,false,(s,n)=>{}),"missing embedded package hash rejected");
+            Throws(()=>Core.Install(Fixture("2026.10.23.8","../escaped.txt",false,true),root,null,false,false,(s,n)=>{}),"embedded package ZIP traversal rejected");
+            Throws(()=>Core.Install(Fixture("2026.10.23.8",null,true,true),root,null,false,false,(s,n)=>{}),"embedded file hash tampering rejected");
+            OK(Core.Read<Active>(Path.Combine(root,"active-version.json")).Version=="2026.10.23.7","invalid resource packages preserve active version");
+            Core.Install(resource,root,null,false,false,(s,n)=>{});
+            OK(Core.Read<Active>(Path.Combine(root,"active-version.json")).Version=="2026.10.23.8" && Core.Read<Active>(Path.Combine(root,"previous-version.json")).Version=="2026.10.23.7","resource package upgrades an existing overlay installation");
+            OK(preserved.All(kv=>File.ReadAllText(Path.Combine(profile,kv.Key))==kv.Value) && Core.Read<Config>(Path.Combine(root,"distribution.json")).DataRoot==profile,"resource upgrade preserves profile data and location");
             using(var form=new ShellForm(true,assembly,Core.DefaultRoot)) { var handle=form.Handle; foreach(System.Windows.Forms.Control child in form.Controls){var childHandle=child.Handle;} form.PerformLayout(); using(var image=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(image,new Rectangle(0,0,image.Width,image.Height));image.Save(Path.Combine(work,"installer-preview.png"));}}
             Core.Uninstall(root,false);
             OK(!Directory.Exists(root) && preserved.All(kv=>File.Exists(Path.Combine(profile,kv.Key))),"uninstall preserves external profile");
