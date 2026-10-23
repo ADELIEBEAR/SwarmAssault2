@@ -4,6 +4,8 @@ Windows용 플레이어 설치·자동 업데이트 도구입니다. 이 저장�
 
 ## 플레이어
 
+최신 정식 패치: [2026.10.23.10 — 갑충 강화·미니맵 확대](https://github.com/ADELIEBEAR/SwarmAssault2/releases/tag/v2026.10.23.10). 기존 설치판은 실행기를 다시 켜서 업데이트를 확인합니다. 대규모 전투 렉 최적화는 이 버전에 포함되지 않았습니다.
+
 **[Releases](https://github.com/ADELIEBEAR/SwarmAssault2/releases)**에서 `SwarmAssaultII-Setup-v버전.exe` 하나를 받아 실행합니다. Windows 10/11 64비트용이며 .NET Framework 4.8을 사용합니다. 게임에 필요한 .NET 6 런타임은 설치파일에 포함됩니다.
 
 - 설치 기본 위치: `%LOCALAPPDATA%\Programs\SwarmAssaultII`
