@@ -79,7 +79,7 @@ def build(project, output, version, private_key):
         for name in ['COPYING','AUTHORS','NanumGothic-OFL.txt']:
             files.append((runtime/name, 'licenses/'+name))
         rights = work/'ASSET-NOTICE.txt'
-        rights.write_text('Game engine: see COPYING (GPL-3.0). Distribution shell: MIT.\nOriginal Swarm Assault assets and external insect graphics retain their own rights.\nSome recorded external models use CC BY-NC-SA or CC BY-NC-ND. Public redistribution permission for converted assets is unverified.\nThis package is prepared for personal testing; resolve asset permissions and corresponding engine source before publishing a public binary release.\nModel provenance records are included; not every recorded model is necessarily used in this build.\n',encoding='utf-8')
+        rights.write_text('Game engine: see COPYING (GPL-3.0). Distribution shell: MIT.\nOriginal Swarm Assault assets and external insect graphics retain their own rights; they are not covered by the distribution shell MIT license.\nSome recorded external models use CC BY-NC-SA or CC BY-NC-ND. Distributors remain responsible for the applicable asset permissions and corresponding engine source obligations.\nModel provenance records are included; not every recorded model is necessarily used in this build.\n',encoding='utf-8')
         files.append((rights,'licenses/ASSET-NOTICE.txt'))
         files.append((HERE/'LICENSE','licenses/Distribution-MIT.txt'))
         guide = work/'플레이-안내.txt'
@@ -105,7 +105,7 @@ def build(project, output, version, private_key):
         shutil.copy2(exe,output/'launcher-build.exe')
         write_json(output/'package-inventory.json',manifest)
         (output/'SHA256SUMS.txt').write_text(digest(setup)+'  '+filename+'\n'+digest(output/'swarm-update.json')+'  swarm-update.json\n',encoding='ascii')
-        (output/'RELEASE-NOTES.md').write_text(f'스웜 어썰트 II {version}\n\n- 플레이어 전용 설치파일: 개발 소스·시험 도구·개인 저장 데이터 제외\n- Windows 10/11 64비트, 관리자 권한 없이 설치\n- 게임 시작 시 GitHub 정식 버전 자동 업데이트\n- 서명·SHA-256 검증, 실패 시 기존 설치로 실행, 저장 데이터 보존\n\n원작/외부 그래픽 자산의 배포 허가와 엔진의 대응 소스는 공개 배포 전 확인이 필요합니다. 현재 바이너리는 개인 시험용입니다.\n',encoding='utf-8')
+        (output/'RELEASE-NOTES.md').write_text(f'스웜 어썰트 II {version}\n\n- 플레이어 전용 설치파일: 개발 소스·시험 도구·개인 저장 데이터 제외\n- Windows 10/11 64비트, 관리자 권한 없이 설치\n- 게임 시작 시 GitHub 정식 버전 자동 업데이트\n- 서명·SHA-256 검증, 업데이트 설치 실패 시 기존 설치로 직접 실행, 저장 데이터 보존\n\n원작·외부 그래픽과 엔진에는 각각의 라이선스가 적용됩니다. 설치 폴더의 licenses를 참고하세요.\n',encoding='utf-8')
         print(json.dumps({'setup':str(setup),'bytes':setup.stat().st_size,'files':len(files),'runtime':active['engine'],'sha256':digest(setup)}))
 
 if __name__ == '__main__':

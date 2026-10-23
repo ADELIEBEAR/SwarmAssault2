@@ -43,7 +43,7 @@ class Tests
         foreach(var kv in files) using(var f=new MemoryStream(kv.Value)) package.Files.Add(new Entry {Path=kv.Key,Length=kv.Value.Length,Sha256=badHash?new string('0',64):Core.Hash(f)});
         byte[] zip;
         using(var stream=new MemoryStream()) { using(var z=new ZipArchive(stream,ZipArchiveMode.Create,true)) { foreach(var kv in files) using(var f=z.CreateEntry(kv.Key).Open()) f.Write(kv.Value,0,kv.Value.Length); byte[] b=Encoding.UTF8.GetBytes(Core.Json.Serialize(package)); using(var f=z.CreateEntry("package.json").Open()) f.Write(b,0,b.Length); } zip=stream.ToArray(); }
-        byte[] prefix=new byte[2048]; prefix[0]=77; prefix[1]=90;
+        byte[] prefix=File.ReadAllBytes(assembly);
         using(var output=File.Create(file)) using(var b=new BinaryWriter(output)) { b.Write(prefix); b.Write(zip); b.Write(Encoding.ASCII.GetBytes("SIISET01")); b.Write((long)prefix.Length); b.Write((long)zip.Length); using(var s=SHA256.Create()) b.Write(s.ComputeHash(zip)); }
         return file;
     }
@@ -104,8 +104,14 @@ class Tests
             Throws(()=>Core.Install(Fixture("2026.10.23.7",null,true),root,null,false,false,(s,n)=>{}),"bad file hash prevents activation");
             OK(Core.Read<Active>(Path.Combine(root,"active-version.json")).Version=="2026.10.23.6","old version survives failed update");
             Throws(()=>Core.Install(Fixture("2026.10.23.7","../escaped.txt",false),root,null,false,false,(s,n)=>{}),"malicious ZIP entry rejected before activation");
-            byte[] tampered=File.ReadAllBytes(v2);tampered[2100]^=1;string bad=Path.Combine(work,"tampered.exe");File.WriteAllBytes(bad,tampered);
+            byte[] tampered=File.ReadAllBytes(v2);tampered[File.ReadAllBytes(assembly).Length+52]^=1;string bad=Path.Combine(work,"tampered.exe");File.WriteAllBytes(bad,tampered);
             Throws(()=>Core.Install(bad,root,null,false,false,(s,n)=>{}),"tampered ZIP overlay rejected");
+            string fallbackOutput=Path.Combine(work,"fallback-arguments.txt");
+            Environment.SetEnvironmentVariable("SII_STUB_OUTPUT",fallbackOutput);
+            using(var updater=System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(bad,Core.Args("--silent","--install-root",root,"--no-register","--no-shortcuts","--launch")){UseShellExecute=false,WindowStyle=System.Diagnostics.ProcessWindowStyle.Hidden}))
+            { if(!updater.WaitForExit(15000)) throw new Exception("Failed updater timeout");OK(updater.ExitCode==1,"failed installer reports failure"); }
+            for(int i=0;i<100 && !File.Exists(fallbackOutput);i++) Thread.Sleep(50);
+            OK(File.Exists(fallbackOutput) && File.ReadAllLines(fallbackOutput).FirstOrDefault()=="Engine.SupportDir="+profile && Core.Read<Active>(Path.Combine(root,"active-version.json")).Version=="2026.10.23.6","failed installer launches unchanged installed game without another update check");
             Core.Install(v2,root,null,false,false,(s,n)=>{});
             OK(Core.Read<Active>(Path.Combine(root,"active-version.json")).Version=="2026.10.23.7" && Core.Read<Active>(Path.Combine(root,"previous-version.json")).Version=="2026.10.23.6","update switches atomically and retains previous version");
             OK(preserved.All(kv=>File.ReadAllText(Path.Combine(profile,kv.Key))==kv.Value),"campaign/settings/custom map preserved across update");

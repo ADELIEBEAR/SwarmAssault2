@@ -453,7 +453,30 @@ namespace SwarmDistribution
                 }
                 Application.Run(new ShellForm(payload, self, payload ? Core.DefaultRoot : Core.Root(root, true))); return 0;
             }
-            catch (Exception e) { Core.Log(e.ToString()); if (!args.Contains("--silent")) MessageBox.Show(e.Message, "스웜 어썰트 II", MessageBoxButtons.OK, MessageBoxIcon.Error); return 1; }
+            catch (Exception e)
+            {
+                Core.Log(e.ToString());
+                if (args.Contains("--silent") && args.Contains("--launch"))
+                {
+                    try
+                    {
+                        root = Core.Root(root, true); bool owns;
+                        using (var mutex = new Mutex(true, Core.MutexName(root), out owns))
+                        {
+                            if (owns)
+                                try
+                                {
+                                    // Launch directly so a failed update cannot restart the updater in a loop.
+                                    if (!Core.GameRunning(root)) using (var game = Core.Launch(root)) { }
+                                }
+                                finally { mutex.ReleaseMutex(); }
+                        }
+                    }
+                    catch (Exception fallback) { Core.Log("Installed game fallback failed: " + fallback.Message); }
+                }
+                if (!args.Contains("--silent")) MessageBox.Show(e.Message, "스웜 어썰트 II", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return 1;
+            }
         }
     }
 }
